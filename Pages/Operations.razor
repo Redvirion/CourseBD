@@ -1,0 +1,235 @@
+﻿@page "/operations"
+@using CourseBD.Models
+@using CourseBD.Data
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+
+<h3>Справочник технологических операций</h3>
+
+<div class="row mb-3">
+    <div class="col-md-3">
+        <input @bind="searchOperationId" @bind:event="oninput" class="form-control" placeholder="Поиск по № операции" />
+    </div>
+    <div class="col-md-3">
+        <input @bind="minHourlyRate" @bind:event="oninput" class="form-control" placeholder="Мин. ставка" type="number" step="0.01" />
+    </div>
+    <div class="col-md-2">
+        <select @bind="sortField" class="form-select">
+            <option value="OperationId">№ операции</option>
+            <option value="HourlyRate">Ставка</option>
+            <option value="Hours">Часы</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select @bind="sortDirection" class="form-select">
+            <option value="asc">По возрастанию</option>
+            <option value="desc">По убыванию</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-primary" @onclick="ApplyFilters">Применить</button>
+        <button class="btn btn-secondary" @onclick="ResetFilters">Сброс</button>
+    </div>
+</div>
+
+<div class="mb-2">
+    <button class="btn btn-success" @onclick="OpenAddModal">Добавить операцию</button>
+</div>
+
+@if (operations == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>№ операции</th>
+                <th>Стоимость нормо-часа</th>
+                <th>Количество часов</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var op in operations)
+            {
+                <tr>
+                    <td>@op.OperationId</td>
+                    <td>@op.HourlyRate.ToString("C")</td>
+                    <td>@op.Hours</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" @onclick="() => OpenEditModal(op)">Изменить</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteOperation(op.OperationId)">Удалить</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <!-- Пагинация -->
+    <nav>
+        <ul class="pagination">
+            <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                <a class="page-link" @onclick="() => ChangePage(currentPage - 1)">Предыдущая</a>
+            </li>
+            @for (int i = 1; i <= totalPages; i++)
+            {
+                <li class="page-item @(currentPage == i ? "active" : "")">
+                    <a class="page-link" @onclick="() => ChangePage(i)">@i</a>
+                </li>
+            }
+            <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                <a class="page-link" @onclick="() => ChangePage(currentPage + 1)">Следующая</a>
+            </li>
+        </ul>
+    </nav>
+}
+
+<!-- Модальное окно для добавления/редактирования -->
+<div class="modal fade @(showModal ? "show d-block" : "")" style="background: rgba(0,0,0,0.5);" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@modalTitle</h5>
+                <button type="button" class="btn-close" @onclick="CloseModal"></button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="@editModel" OnValidSubmit="@SaveOperation">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <div class="mb-3">
+                        <label class="form-label">№ операции</label>
+                        <InputNumber @bind-Value="editModel.OperationId" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Стоимость нормо-часа</label>
+                        <InputNumber @bind-Value="editModel.HourlyRate" class="form-control" step="0.01" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Количество часов на операцию</label>
+                        <InputNumber @bind-Value="editModel.Hours" class="form-control" step="0.01" />
+                    </div>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Отмена</button>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Operation> operations;
+    private string searchOperationId = "";
+    private decimal? minHourlyRate;
+    private string sortField = "OperationId";
+    private string sortDirection = "asc";
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+
+    private bool showModal = false;
+    private string modalTitle = "Добавление операции";
+    private Operation editModel = new Operation();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        var query = DbContext.Operations.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchOperationId) && int.TryParse(searchOperationId, out int opId))
+            query = query.Where(o => o.OperationId == opId);
+        if (minHourlyRate.HasValue)
+            query = query.Where(o => o.HourlyRate >= minHourlyRate.Value);
+
+        query = sortField switch
+        {
+            "OperationId" => sortDirection == "asc" ? query.OrderBy(o => o.OperationId) : query.OrderByDescending(o => o.OperationId),
+            "HourlyRate" => sortDirection == "asc" ? query.OrderBy(o => o.HourlyRate) : query.OrderByDescending(o => o.HourlyRate),
+            "Hours" => sortDirection == "asc" ? query.OrderBy(o => o.Hours) : query.OrderByDescending(o => o.Hours),
+            _ => query.OrderBy(o => o.OperationId)
+        };
+
+        int totalCount = await query.CountAsync();
+        totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        operations = await query
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+    }
+
+    private async Task ApplyFilters()
+    {
+        currentPage = 1;
+        await LoadData();
+    }
+
+    private async Task ResetFilters()
+    {
+        searchOperationId = "";
+        minHourlyRate = null;
+        sortField = "OperationId";
+        sortDirection = "asc";
+        currentPage = 1;
+        await LoadData();
+    }
+
+    private async Task ChangePage(int page)
+    {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+        await LoadData();
+    }
+
+    private void OpenAddModal()
+    {
+        editModel = new Operation();
+        modalTitle = "Добавление операции";
+        showModal = true;
+    }
+
+    private void OpenEditModal(Operation operation)
+    {
+        editModel = new Operation
+        {
+            OperationId = operation.OperationId,
+            HourlyRate = operation.HourlyRate,
+            Hours = operation.Hours
+        };
+        modalTitle = "Редактирование операции";
+        showModal = true;
+    }
+
+    private async Task SaveOperation()
+    {
+        var existing = await DbContext.Operations.FindAsync(editModel.OperationId);
+        if (existing == null)
+            DbContext.Operations.Add(editModel);
+        else
+        {
+            existing.HourlyRate = editModel.HourlyRate;
+            existing.Hours = editModel.Hours;
+        }
+        await DbContext.SaveChangesAsync();
+        CloseModal();
+        await LoadData();
+    }
+
+    private async Task DeleteOperation(int id)
+    {
+        var operation = await DbContext.Operations.FindAsync(id);
+        if (operation != null)
+        {
+            DbContext.Operations.Remove(operation);
+            await DbContext.SaveChangesAsync();
+            await LoadData();
+        }
+    }
+
+    private void CloseModal() => showModal = false;
+}

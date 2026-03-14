@@ -1,0 +1,291 @@
+﻿@page "/techprocesses"
+@using CourseBD.Models
+@using CourseBD.Data
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+
+<h3>Техпроцессы изготовления комплектующих</h3>
+
+<div class="row mb-3">
+    <div class="col-md-2">
+        <input @bind="searchComponent" @bind:event="oninput" class="form-control" placeholder="Комплектующее" />
+    </div>
+    <div class="col-md-2">
+        <select @bind="sortField" class="form-select">
+            <option value="ComponentId">Комплектующее</option>
+            <option value="MaterialId">Материал</option>
+            <option value="OperationId">Операция</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select @bind="sortDirection" class="form-select">
+            <option value="asc">По возрастанию</option>
+            <option value="desc">По убыванию</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <button class="btn btn-primary" @onclick="ApplyFilters">Применить</button>
+        <button class="btn btn-secondary" @onclick="ResetFilters">Сброс</button>
+    </div>
+</div>
+
+<div class="mb-2">
+    <button class="btn btn-success" @onclick="OpenAddModal">Добавить техпроцесс</button>
+</div>
+
+@if (techProcesses == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Комплектующее</th>
+                <th>Материал</th>
+                <th>Кол-во материала</th>
+                <th>Операция</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var tp in techProcesses)
+            {
+                <tr>
+                    <td>@tp.TechProcessId</td>
+                    <td>@tp.Component?.Name (@tp.ComponentId)</td>
+                    <td>@tp.Material?.Name</td>
+                    <td>@tp.Quantity</td>
+                    <td>@tp.OperationId</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" @onclick="() => OpenEditModal(tp)">Изменить</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteTechProcess(tp.TechProcessId)">Удалить</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <!-- Пагинация -->
+    <nav>
+        <ul class="pagination">
+            <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                <a class="page-link" @onclick="() => ChangePage(currentPage - 1)">Предыдущая</a>
+            </li>
+            @for (int i = 1; i <= totalPages; i++)
+            {
+                <li class="page-item @(currentPage == i ? "active" : "")">
+                    <a class="page-link" @onclick="() => ChangePage(i)">@i</a>
+                </li>
+            }
+            <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                <a class="page-link" @onclick="() => ChangePage(currentPage + 1)">Следующая</a>
+            </li>
+        </ul>
+    </nav>
+}
+
+<!-- Модальное окно -->
+<div class="modal fade @(showModal ? "show d-block" : "")" style="background: rgba(0,0,0,0.5);" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@modalTitle</h5>
+                <button type="button" class="btn-close" @onclick="CloseModal"></button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="@editModel" OnValidSubmit="@SaveTechProcess">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <div class="mb-3">
+                        <label class="form-label">Комплектующее</label>
+                        <InputSelect @bind-Value="editModel.ComponentId" class="form-select">
+                            <option value="">-- Выберите --</option>
+                            @if (components != null)
+                            {
+                                @foreach (var comp in components)
+                                {
+                                    <option value="@comp.ComponentId">@comp.ComponentId - @comp.Name</option>
+                                }
+                            }
+                            else
+                            {
+                                <option value="" disabled>Загрузка...</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Материал</label>
+                        <InputSelect @bind-Value="editModel.MaterialId" class="form-select">
+                            <option value="">-- Выберите --</option>
+                            @foreach (var mat in materials)
+                            {
+                                <option value="@mat.MaterialId">@mat.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Количество материала</label>
+                        <InputNumber @bind-Value="editModel.Quantity" class="form-control" step="0.01" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Операция</label>
+                        <InputSelect @bind-Value="editModel.OperationId" class="form-select">
+                            <option value="">-- Выберите --</option>
+                            @foreach (var op in operations)
+                            {
+                                <option value="@op.OperationId">@op.OperationId (ставка @op.HourlyRate, @op.Hours ч)</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Отмена</button>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<TechProcess> techProcesses = new();
+    private List<Component> components = new();
+    private List<Material> materials = new();
+    private List<Operation> operations = new();
+    private string searchComponent = "";
+    private string sortField = "ComponentId";
+    private string sortDirection = "asc";
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+
+    private bool showModal = false;
+    private string modalTitle = "Добавление техпроцесса";
+    private TechProcess editModel = new TechProcess();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReferenceData();
+        await LoadData();
+    }
+
+    private async Task LoadReferenceData()
+    {
+        try
+        {
+            components = await DbContext.Components.ToListAsync() ?? new List<Component>();
+            materials = await DbContext.Materials.ToListAsync() ?? new List<Material>();
+            operations = await DbContext.Operations.ToListAsync() ?? new List<Operation>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка загрузки справочных данных: {ex.Message}");
+            // Списки уже инициализированы пустыми, поэтому дополнительных действий не требуется
+        }
+    }
+
+    private async Task LoadData()
+    {
+        var query = DbContext.TechProcesses
+            .Include(t => t.Component)
+            .Include(t => t.Material)
+            .Include(t => t.Operation)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchComponent))
+            query = query.Where(t => t.ComponentId.Contains(searchComponent) || t.Component.Name.Contains(searchComponent));
+
+        query = sortField switch
+        {
+            "ComponentId" => sortDirection == "asc" ? query.OrderBy(t => t.ComponentId) : query.OrderByDescending(t => t.ComponentId),
+            "MaterialId" => sortDirection == "asc" ? query.OrderBy(t => t.MaterialId) : query.OrderByDescending(t => t.MaterialId),
+            "OperationId" => sortDirection == "asc" ? query.OrderBy(t => t.OperationId) : query.OrderByDescending(t => t.OperationId),
+            _ => query.OrderBy(t => t.TechProcessId)
+        };
+
+        int totalCount = await query.CountAsync();
+        totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        techProcesses = await query
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+    }
+
+    private async Task ApplyFilters()
+    {
+        currentPage = 1;
+        await LoadData();
+    }
+
+    private async Task ResetFilters()
+    {
+        searchComponent = "";
+        sortField = "ComponentId";
+        sortDirection = "asc";
+        currentPage = 1;
+        await LoadData();
+    }
+
+    private async Task ChangePage(int page)
+    {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+        await LoadData();
+    }
+
+    private void OpenAddModal()
+    {
+        editModel = new TechProcess();
+        modalTitle = "Добавление техпроцесса";
+        showModal = true;
+    }
+
+    private void OpenEditModal(TechProcess tp)
+    {
+        editModel = new TechProcess
+        {
+            TechProcessId = tp.TechProcessId,
+            ComponentId = tp.ComponentId,
+            MaterialId = tp.MaterialId,
+            Quantity = tp.Quantity,
+            OperationId = tp.OperationId
+        };
+        modalTitle = "Редактирование техпроцесса";
+        showModal = true;
+    }
+
+    private async Task SaveTechProcess()
+    {
+        if (editModel.TechProcessId == 0)
+            DbContext.TechProcesses.Add(editModel);
+        else
+        {
+            var existing = await DbContext.TechProcesses.FindAsync(editModel.TechProcessId);
+            if (existing != null)
+            {
+                existing.ComponentId = editModel.ComponentId;
+                existing.MaterialId = editModel.MaterialId;
+                existing.Quantity = editModel.Quantity;
+                existing.OperationId = editModel.OperationId;
+            }
+        }
+        await DbContext.SaveChangesAsync();
+        CloseModal();
+        await LoadData();
+    }
+
+    private async Task DeleteTechProcess(int id)
+    {
+        var tp = await DbContext.TechProcesses.FindAsync(id);
+        if (tp != null)
+        {
+            DbContext.TechProcesses.Remove(tp);
+            await DbContext.SaveChangesAsync();
+            await LoadData();
+        }
+    }
+
+    private void CloseModal() => showModal = false;
+}
