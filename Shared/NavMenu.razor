@@ -1,20 +1,20 @@
 ﻿<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">CourseBD</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+      @*   <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
             <span class="navbar-toggler-icon"></span>
-        </button>
+        </button> *@
     </div>
 </div>
 
 <div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
 
     <nav class="flex-column">
-        <div class="nav-item px-3">
+       @*  <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
                 <span class="oi oi-home" aria-hidden="true"></span> Главная
             </NavLink>
-        </div>
+        </div> *@
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="materials">
                 <span class="oi oi-list-rich" aria-hidden="true"></span> Материалы
@@ -46,17 +46,17 @@
             </NavLink>
         </div>
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="reports/productcost">
+            <NavLink class="nav-link" href="productcost">
                 <span class="oi oi-calculator" aria-hidden="true"></span> Себестоимость изделий
             </NavLink>
         </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="reports/producttechprocess">
+      @*   <div class="nav-item px-3">
+            <NavLink class="nav-link" href="producttechprocess">
                 <span class="oi oi-list" aria-hidden="true"></span> Техпроцесс изделия
             </NavLink>
-        </div>
+        </div> *@
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="reports/profit">
+            <NavLink class="nav-link" href="profit">
                 <span class="oi oi-dollar" aria-hidden="true"></span> Прибыль
             </NavLink>
         </div>

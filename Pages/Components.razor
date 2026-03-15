@@ -3,7 +3,6 @@
 @using CourseBD.Data
 @using Microsoft.EntityFrameworkCore
 @inject ApplicationDbContext DbContext
-@implements IDisposable
 
 <h3>Справочник комплектующих</h3>
 
@@ -271,6 +270,4 @@ else
     }
 
     private void CloseModal() => showModal = false;
-
-    public void Dispose() => DbContext?.Dispose();
 }

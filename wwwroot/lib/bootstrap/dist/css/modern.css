@@ -303,7 +303,7 @@ h1, h2, h3, h4, h5 {
 
     body {
         background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
-        color: #e2e8f0;
+        color: black;
     }
 
     .page {
@@ -312,12 +312,12 @@ h1, h2, h3, h4, h5 {
     }
 
     h1, h2, h3, h4, h5 {
-        color: #f7fafc;
+        color: black;
     }
 
     .table {
         background: #2d3748;
-        color: #e2e8f0;
+        color: black;
     }
 
         .table td {
