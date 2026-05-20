@@ -1,88 +1,90 @@
-﻿using CourseBD.Models;
-using Microsoft.EntityFrameworkCore;
-using System.Collections.Generic;
-using System.Reflection.Emit;
+﻿using Microsoft.EntityFrameworkCore;
+using CourseBD.Models;
 
 namespace CourseBD.Data
 {
     public class ApplicationDbContext : DbContext
     {
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-            : base(options)
-        {
-        }
+            : base(options) { }
 
         public DbSet<Material> Materials { get; set; }
         public DbSet<Operation> Operations { get; set; }
         public DbSet<Component> Components { get; set; }
-        public DbSet<Product> Products { get; set; }
-        public DbSet<ProductComposition> ProductCompositions { get; set; }
         public DbSet<TechProcess> TechProcesses { get; set; }
+        public DbSet<TechProcessOperation> TechProcessOperations { get; set; }
+        public DbSet<Product> Products { get; set; }
+        public DbSet<ProductComponent> ProductComponents { get; set; }
+        public DbSet<Request> Requests { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            // Составной первичный ключ для ProductComposition
-            modelBuilder.Entity<ProductComposition>()
+            // Составные первичные ключи
+            modelBuilder.Entity<TechProcessOperation>()
+                .HasKey(tpo => new { tpo.TechProcessId, tpo.OperationId });
+
+            modelBuilder.Entity<ProductComponent>()
                 .HasKey(pc => new { pc.ProductId, pc.ComponentId });
 
-            // Самоссылающаяся связь Component (TechProcessRef)
-            modelBuilder.Entity<Component>()
-                .HasOne(c => c.ParentComponent)
-                .WithMany(c => c.ChildComponents)
-                .HasForeignKey(c => c.TechProcessRef)
+            modelBuilder.Entity<TechProcessOperation>()
+                .HasOne(tpo => tpo.TechProcess)
+                .WithMany(tp => tp.TechProcessOperations)
+                .HasForeignKey(tpo => tpo.TechProcessId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<TechProcessOperation>()
+                .HasOne(tpo => tpo.Operation)
+                .WithMany(o => o.TechProcessOperations)
+                .HasForeignKey(tpo => tpo.OperationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ProductComponent>()
+                .HasOne(pc => pc.Product)
+                .WithMany(p => p.ProductComponents)
+                .HasForeignKey(pc => pc.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ProductComponent>()
+                .HasOne(pc => pc.Component)
+                .WithMany(c => c.ProductComponents)
+                .HasForeignKey(pc => pc.ComponentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Product>()
+                .HasOne(p => p.TechProcess)
+                .WithMany(tp => tp.Products)
+                .HasForeignKey(p => p.TechProcessId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Request>()
+                .HasOne(r => r.Product)
+                .WithMany(p => p.Requests)
+                .HasForeignKey(r => r.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             // Индексы
-            modelBuilder.Entity<Component>()
-                .HasIndex(c => c.Name)
-                .HasDatabaseName("IX_Components_Name");
+            modelBuilder.Entity<Product>().HasIndex(p => p.Name);
+            modelBuilder.Entity<Request>().HasIndex(r => r.RequestDate);
+            modelBuilder.Entity<TechProcess>().HasIndex(t => t.MaterialId);
 
-            modelBuilder.Entity<Product>()
-                .HasIndex(p => p.Name)
-                .HasDatabaseName("IX_Products_Name");
-
-            modelBuilder.Entity<ProductComposition>()
-                .HasIndex(pc => pc.ProductId)
-                .HasDatabaseName("IX_ProductComposition_ProductId");
-
-            modelBuilder.Entity<TechProcess>()
-                .HasIndex(t => t.ComponentId)
-                .HasDatabaseName("IX_TechProcess_ComponentId");
-
-            modelBuilder.Entity<TechProcess>()
-                .HasIndex(t => t.MaterialId)
-                .HasDatabaseName("IX_TechProcess_MaterialId");
-
-            modelBuilder.Entity<TechProcess>()
-                .HasIndex(t => t.OperationId)
-                .HasDatabaseName("IX_TechProcess_OperationId");
-
-            // Уникальность в TechProcess
-            modelBuilder.Entity<TechProcess>()
-                .HasIndex(t => new { t.ComponentId, t.MaterialId, t.OperationId })
-                .IsUnique()
-                .HasDatabaseName("IX_TechProcess_Unique");
-
-            // Ограничения CHECK (через Fluent API)
             modelBuilder.Entity<Material>()
-                .ToTable(t => t.HasCheckConstraint("CK_Material_Price", "\"Price\" >= 0"));
-
+                .ToTable(t => t.HasCheckConstraint("CK_Material_Cost", "\"Cost\" >= 0"));
             modelBuilder.Entity<Operation>()
-                .ToTable(t => t.HasCheckConstraint("CK_Operation_HourlyRate", "\"HourlyRate\" >= 0"));
-            modelBuilder.Entity<Operation>()
-                .ToTable(t => t.HasCheckConstraint("CK_Operation_Hours", "\"Hours\" > 0"));
-
+                .ToTable(t => t.HasCheckConstraint("CK_Operation_Cost", "\"Cost\" >= 0"));
             modelBuilder.Entity<Component>()
                 .ToTable(t => t.HasCheckConstraint("CK_Component_Cost", "\"Cost\" >= 0"));
-
-            modelBuilder.Entity<Product>()
-                .ToTable(t => t.HasCheckConstraint("CK_Product_LaborHours", "\"LaborHours\" >= 0"));
-
-            modelBuilder.Entity<ProductComposition>()
-                .ToTable(t => t.HasCheckConstraint("CK_ProductComposition_Quantity", "\"Quantity\" > 0"));
-
+     
             modelBuilder.Entity<TechProcess>()
-                .ToTable(t => t.HasCheckConstraint("CK_TechProcess_Quantity", "\"Quantity\" > 0"));
+                .ToTable(t => t.HasCheckConstraint("CK_TechProcess_MaterialQuantity", "\"MaterialQuantity\" > 0"));
+            modelBuilder.Entity<ProductComponent>()
+                .ToTable(t => t.HasCheckConstraint("CK_ProductComponent_Quantity", "\"Quantity\" > 0"));
+ 
+            modelBuilder.Entity<Request>()
+                .ToTable(t => t.HasCheckConstraint("CK_Request_Quantity", "\"Quantity\" > 0"));
+
+            modelBuilder.Entity<Request>()
+                .Property(r => r.RequestDate)
+                .HasColumnType("timestamp without time zone");
         }
     }
 }

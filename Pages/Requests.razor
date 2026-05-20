@@ -1,10 +1,11 @@
-﻿@page "/products"
+﻿@page "/requests"
+@page "/"
 @using CourseBD.Models
 @using Microsoft.EntityFrameworkCore
 @inject ApplicationDbContext DbContext
 @implements IDisposable
 
-<h5 class="mb-2">📦 Изделия</h5>
+<h5 class="mb-2">📋 Заявки</h5>
 
 @if (!string.IsNullOrEmpty(notificationMessage))
 {
@@ -15,34 +16,20 @@
 }
 
 <div class="d-flex flex-nowrap gap-2 mb-2 align-items-end overflow-auto">
-    <div class="input-group input-group-sm" style="min-width: 200px;">
-        <span class="input-group-text">🔍</span>
-        <input type="text" class="form-control form-control-sm"
-               @bind-value:get="searchName"
-               @bind-value:set="SetSearchName"
-               @bind-value:event="oninput"
-               placeholder="Наименование" />
-        <button class="btn btn-outline-secondary btn-sm" @onclick="ClearSearch">✖</button>
-    </div>
+    <select class="form-select form-select-sm" style="width: 200px;" @bind="filterProductId">
+        <option value="0">Все изделия</option>
+        @foreach (var p in products) { <option value="@p.ProductId">@p.Name</option> }
+    </select>
     <select class="form-select form-select-sm" style="width: auto;" @bind="pageSize" @bind:after="OnPageSizeChanged">
         <option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option>
     </select>
-    <button class="btn btn-sm btn-success" @onclick="OpenAddModal">➕ Добавить</button>
+    <button class="btn btn-sm btn-success" @onclick="OpenAddModal">➕ Создать заявку</button>
 </div>
 
 <div class="table-responsive">
     <table class="table table-sm table-hover align-middle mb-1">
         <thead class="table-light">
-            <tr>
-                <th style="width: 60px">ID</th>
-                <th @onclick="() => SortBy(nameof(Product.Name))" style="cursor: pointer;">
-                    Наименование
-                    @if (sortColumn == nameof(Product.Name)) { <span class="ms-1">@(sortAscending ? "▲" : "▼")</span> }
-                </th>
-                <th style="width: 100px">Техпроцесс</th>
-                <th>Состав</th>
-                <th style="width: 90px" class="text-center">Действия</th>
-            </tr>
+            <tr><th style="width: 60px">ID</th><th>Изделие</th><th style="width: 100px">Количество</th><th style="width: 120px">Дата</th><th style="width: 90px" class="text-center">Действия</th></tr>
         </thead>
         <tbody>
             @if (isLoading)
@@ -55,16 +42,16 @@
             }
             else
             {
-                @foreach (var p in items)
+                @foreach (var r in items)
                 {
                     <tr>
-                        <td>@p.ProductId</td>
-                        <td>@p.Name</td>
-                        <td>@p.TechProcessId</td>
-                        <td>@p.ComponentsList</td>
+                        <td>@r.RequestId</td>
+                        <td>@r.Product?.Name</td>
+                        <td>@r.Quantity</td>
+                        <td>@r.RequestDate.ToShortDateString()</td>
                         <td class="text-center text-nowrap">
-                            <button class="btn btn-sm btn-link text-primary p-0 me-2" @onclick="() => OpenEditModal(p)" title="Редактировать">✏️</button>
-                            <button class="btn btn-sm btn-link text-danger p-0" @onclick="() => OpenDeleteConfirmation(p)" title="Удалить">🗑️</button>
+                            <button class="btn btn-sm btn-link text-primary p-0 me-2" @onclick="() => OpenEditModal(r)" title="Редактировать">✏️</button>
+                            <button class="btn btn-sm btn-link text-danger p-0" @onclick="() => OpenDeleteConfirmation(r)" title="Удалить">🗑️</button>
                         </td>
                     </tr>
                 }
@@ -107,14 +94,15 @@
             <div class="modal-body py-2">
                 <EditForm Model="@editItem" OnValidSubmit="@SaveItem">
                     <DataAnnotationsValidator /><ValidationSummary class="alert alert-danger py-1 small" />
-                    <div class="mb-2"><label class="form-label small">Наименование</label><InputText @bind-Value="editItem.Name" class="form-control form-control-sm" /></div>
                     <div class="mb-2">
-                        <label class="form-label small">Техпроцесс</label>
-                        <InputSelect @bind-Value="editItem.TechProcessId" class="form-select form-select-sm">
+                        <label class="form-label small">Изделие</label>
+                        <InputSelect @bind-Value="editItem.ProductId" class="form-select form-select-sm">
                             <option value="0">-- Выберите --</option>
-                            @foreach (var tp in techProcesses) { <option value="@tp.TechProcessId">Процесс №@tp.TechProcessId</option> }
+                            @foreach (var p in products) { <option value="@p.ProductId">@p.Name</option> }
                         </InputSelect>
                     </div>
+                    <div class="mb-2"><label class="form-label small">Количество</label><InputNumber @bind-Value="editItem.Quantity" class="form-control form-control-sm" min="1" /></div>
+                    <div class="mb-2"><label class="form-label small">Дата</label><InputDate @bind-Value="editItem.RequestDate" class="form-control form-control-sm" /></div>
                     <div class="d-flex justify-content-end gap-2 mt-2">
                         <button type="submit" class="btn btn-sm btn-primary" disabled="@isSaving">@if (isSaving) { <span class="spinner-border spinner-border-sm me-1"></span> } Сохранить</button>
                         <button type="button" class="btn btn-sm btn-secondary" @onclick="CloseModal">Отмена</button>
@@ -129,7 +117,7 @@
     <div class="modal-dialog modal-dialog-centered modal-sm" @onclick:stopPropagation>
         <div class="modal-content">
             <div class="modal-header py-1"><h6 class="modal-title">Удаление</h6></div>
-            <div class="modal-body py-2 small">Удалить изделие «<strong>@itemToDelete?.Name</strong>»?</div>
+            <div class="modal-body py-2 small">Удалить заявку №<strong>@itemToDelete?.RequestId</strong>?</div>
             <div class="modal-footer py-1">
                 <button class="btn btn-sm btn-danger" @onclick="ConfirmDelete" disabled="@isDeleting">@if (isDeleting) { <span class="spinner-border spinner-border-sm me-1"></span> } Удалить</button>
                 <button class="btn btn-sm btn-secondary" @onclick="CloseDeleteModal">Отмена</button>
@@ -139,21 +127,19 @@
 </div>
 
 @code {
-    private List<Product> items = new();
-    private List<TechProcess> techProcesses = new();
-    private string searchName = "";
-    private string sortColumn = nameof(Product.Name);
-    private bool sortAscending = true;
+    private List<Request> items = new();
+    private List<Product> products = new();
+    private int filterProductId = 0;
     private int currentPage = 1, pageSize = 10, totalPages = 1, totalCount = 0, gotoPage = 1;
     private bool isLoading, isSaving, isDeleting, showModal, showDeleteModal;
     private string notificationMessage = "", notificationType = "success", modalTitle = "";
-    private Product editItem = new();
-    private Product? itemToDelete = null;
+    private Request editItem = new();
+    private Request? itemToDelete = null;
     private Timer? searchDebounceTimer;
 
     protected override async Task OnInitializedAsync()
     {
-        techProcesses = await DbContext.TechProcesses.ToListAsync();
+        products = await DbContext.Products.ToListAsync();
         await LoadData();
     }
 
@@ -162,10 +148,10 @@
         try
         {
             isLoading = true;
-            var query = DbContext.Products.AsQueryable();
-            if (!string.IsNullOrWhiteSpace(searchName)) query = query.Where(p => p.Name.Contains(searchName));
+            var query = DbContext.Requests.Include(r => r.Product).AsQueryable();
+            if (filterProductId != 0) query = query.Where(r => r.ProductId == filterProductId);
             totalCount = await query.CountAsync();
-            query = sortAscending ? query.OrderBy(p => EF.Property<object>(p, sortColumn)) : query.OrderByDescending(p => EF.Property<object>(p, sortColumn));
+            query = query.OrderBy(r => r.RequestId);
             totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
             if (currentPage > totalPages && totalPages > 0) currentPage = totalPages;
             if (currentPage < 1) currentPage = 1;
@@ -178,19 +164,16 @@
 
     private async Task ChangePage(int page) { if (page < 1 || page > totalPages) return; currentPage = page; await LoadData(); }
     private async Task GoToPage() { if (gotoPage >= 1 && gotoPage <= totalPages) await ChangePage(gotoPage); else ShowNotification("Некорректный номер страницы", "danger"); }
-    private async Task SortBy(string column) { if (sortColumn == column) sortAscending = !sortAscending; else { sortColumn = column; sortAscending = true; } currentPage = 1; await LoadData(); }
     private async Task OnPageSizeChanged() { currentPage = 1; await LoadData(); }
-    private void SetSearchName(string value) { searchName = value; searchDebounceTimer?.Dispose(); searchDebounceTimer = new Timer(_ => InvokeAsync(async () => { currentPage = 1; await LoadData(); StateHasChanged(); }), null, 300, Timeout.Infinite); }
-    private async Task ClearSearch() { searchName = ""; currentPage = 1; await LoadData(); }
-    private void OpenAddModal() { editItem = new(); modalTitle = "Новое изделие"; showModal = true; StateHasChanged(); }
-    private void OpenEditModal(Product p) { editItem = new Product { ProductId = p.ProductId, Name = p.Name, TechProcessId = p.TechProcessId }; modalTitle = "Редактирование"; showModal = true; StateHasChanged(); }
+    private void OpenAddModal() { editItem = new(); modalTitle = "Новая заявка"; showModal = true; StateHasChanged(); }
+    private void OpenEditModal(Request r) { editItem = new Request { RequestId = r.RequestId, ProductId = r.ProductId, Quantity = r.Quantity, RequestDate = r.RequestDate }; modalTitle = "Редактирование"; showModal = true; StateHasChanged(); }
     private async Task SaveItem()
     {
         try
         {
             isSaving = true;
-            if (editItem.ProductId == 0) DbContext.Products.Add(editItem);
-            else { var existing = await DbContext.Products.FindAsync(editItem.ProductId); if (existing != null) { existing.Name = editItem.Name; existing.TechProcessId = editItem.TechProcessId; } else DbContext.Products.Update(editItem); }
+            if (editItem.RequestId == 0) DbContext.Requests.Add(editItem);
+            else { var existing = await DbContext.Requests.FindAsync(editItem.RequestId); if (existing != null) { existing.ProductId = editItem.ProductId; existing.Quantity = editItem.Quantity; existing.RequestDate = editItem.RequestDate; } else DbContext.Requests.Update(editItem); }
             await DbContext.SaveChangesAsync();
             ShowNotification("Сохранено", "success");
             CloseModal();
@@ -199,15 +182,15 @@
         catch (Exception ex) { ShowNotification($"Ошибка: {ex.InnerException?.Message ?? ex.Message}", "danger"); }
         finally { isSaving = false; }
     }
-    private void OpenDeleteConfirmation(Product p) { itemToDelete = p; showDeleteModal = true; StateHasChanged(); }
+    private void OpenDeleteConfirmation(Request r) { itemToDelete = r; showDeleteModal = true; StateHasChanged(); }
     private async Task ConfirmDelete()
     {
         if (itemToDelete == null) return;
         try
         {
             isDeleting = true;
-            var entity = await DbContext.Products.FindAsync(itemToDelete.ProductId);
-            if (entity != null) { DbContext.Products.Remove(entity); await DbContext.SaveChangesAsync(); ShowNotification($"Удалено изделие «{itemToDelete.Name}»", "success"); CloseDeleteModal(); await LoadData(); }
+            var entity = await DbContext.Requests.FindAsync(itemToDelete.RequestId);
+            if (entity != null) { DbContext.Requests.Remove(entity); await DbContext.SaveChangesAsync(); ShowNotification($"Удалена заявка №{itemToDelete.RequestId}", "success"); CloseDeleteModal(); await LoadData(); }
             else { ShowNotification("Запись не найдена", "danger"); CloseDeleteModal(); }
         }
         catch (Exception ex) { ShowNotification($"Ошибка удаления: {ex.Message}", "danger"); }

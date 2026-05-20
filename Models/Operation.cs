@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.Collections.Generic;
 
 namespace CourseBD.Models
 {
@@ -8,12 +7,13 @@ namespace CourseBD.Models
         [Key]
         public int OperationId { get; set; }
 
-        [Range(0, double.MaxValue, ErrorMessage = "Ставка не может быть отрицательной")]
-        public decimal HourlyRate { get; set; }
+        [Required(ErrorMessage = "Наименование обязательно")]
+        [MaxLength(200)]
+        public string Name { get; set; }
 
-        [Range(0.01, double.MaxValue, ErrorMessage = "Количество часов должно быть больше 0")]
-        public decimal Hours { get; set; }
+        [Range(0, double.MaxValue, ErrorMessage = "Стоимость не может быть отрицательной")]
+        public decimal Cost { get; set; }
 
-        public ICollection<TechProcess> TechProcesses { get; set; }
+        public ICollection<TechProcessOperation> TechProcessOperations { get; set; }
     }
 }

@@ -1,0 +1,163 @@
+﻿@page "/ProductComposition"
+@using CourseBD.Models
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+
+<h5 class="mb-2">🧩 Состав изделия</h5>
+
+@if (!string.IsNullOrEmpty(notificationMessage))
+{
+    <div class="alert alert-@notificationType alert-dismissible fade show d-flex align-items-center py-1 mb-2" role="alert">
+        <span class="flex-grow-1 small">@notificationMessage</span>
+        <button type="button" class="btn-close btn-close-sm" @onclick="ClearNotification"></button>
+    </div>
+}
+
+<div class="d-flex flex-nowrap gap-2 mb-2 align-items-end">
+    <div style="min-width: 250px;">
+        <label class="form-label small mb-0">Выберите изделие</label>
+        <select class="form-select form-select-sm" @bind="selectedProductId" @bind:after="LoadComposition">
+            <option value="0">-- Выберите --</option>
+            @foreach (var p in products) { <option value="@p.ProductId">@p.Name</option> }
+        </select>
+    </div>
+    <button class="btn btn-sm btn-primary mt-3" @onclick="OpenNewProductModal">➕ Новое изделие</button>
+</div>
+
+@if (selectedProductId > 0)
+{
+    <h6 class="mt-2">Состав: @selectedProductName</h6>
+    <div class="d-flex gap-2 mb-2">
+        <button class="btn btn-sm btn-success" @onclick="OpenAddModal">➕ Добавить комплектующее</button>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-1">
+            <thead class="table-light"><tr><th>Комплектующее</th><th style="width: 100px">Количество</th><th style="width: 70px"></th></tr></thead>
+            <tbody>
+                @foreach (var item in composition)
+                {
+                    <tr>
+                        <td>@item.Component?.Name</td>
+                        <td>@item.Quantity</td>
+                        <td><button class="btn btn-sm btn-link text-danger p-0" @onclick="() => RemoveComponent(item.ComponentId)">🗑️</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- Модальное окно добавления комплектующего -->
+<div class="modal @(showAddModal ? "show d-block" : "")" style="display: @(showAddModal ? "block" : "none"); background: rgba(0,0,0,0.5);" tabindex="-1" @onclick="CloseAddModalOnBackdrop" @onkeydown="HandleAddModalKeyDown">
+    <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation>
+        <div class="modal-content">
+            <div class="modal-header py-1"><h6 class="modal-title">Добавить комплектующее</h6></div>
+            <div class="modal-body py-2">
+                <div class="mb-2"><label class="form-label small">Комплектующее</label>
+                    <select @bind="selectedComponentId" class="form-select form-select-sm">
+                        <option value="0">-- Выберите --</option>
+                        @foreach (var c in components) { <option value="@c.ComponentId">@c.Name</option> }
+                    </select>
+                </div>
+                <div class="mb-2"><label class="form-label small">Количество</label><input type="number" class="form-control form-control-sm" @bind="newQuantity" min="1" /></div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button class="btn btn-sm btn-primary" @onclick="AddComponent">Добавить</button>
+                    <button class="btn btn-sm btn-secondary" @onclick="CloseAddModal">Отмена</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно создания нового изделия -->
+<div class="modal @(showProductModal ? "show d-block" : "")" style="display: @(showProductModal ? "block" : "none"); background: rgba(0,0,0,0.5);" tabindex="-1" @onclick="CloseProductModalOnBackdrop" @onkeydown="HandleProductModalKeyDown">
+    <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation>
+        <div class="modal-content">
+            <div class="modal-header py-1"><h6 class="modal-title">Новое изделие</h6></div>
+            <div class="modal-body py-2">
+                <div class="mb-2"><label class="form-label small">Наименование</label><input type="text" class="form-control form-control-sm" @bind="newProductName" /></div>
+                <div class="mb-2"><label class="form-label small">Техпроцесс</label>
+                    <select @bind="newProductTechProcessId" class="form-select form-select-sm">
+                        <option value="0">-- Выберите --</option>
+                        @foreach (var tp in techProcesses) { <option value="@tp.TechProcessId">Процесс №@tp.TechProcessId</option> }
+                    </select>
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button class="btn btn-sm btn-primary" @onclick="CreateProduct">Создать</button>
+                    <button class="btn btn-sm btn-secondary" @onclick="CloseProductModal">Отмена</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Product> products = new();
+    private List<Component> components = new();
+    private List<TechProcess> techProcesses = new();
+    private int selectedProductId = 0;
+    private string selectedProductName = "";
+    private List<ProductComponent> composition = new();
+    private int selectedComponentId = 0;
+    private int newQuantity = 1;
+    private string newProductName = "";
+    private int newProductTechProcessId = 0;
+    private bool showAddModal = false, showProductModal = false;
+    private string notificationMessage = "", notificationType = "success";
+
+    protected override async Task OnInitializedAsync()
+    {
+        products = await DbContext.Products.ToListAsync();
+        components = await DbContext.Components.ToListAsync();
+        techProcesses = await DbContext.TechProcesses.ToListAsync();
+    }
+
+    private async Task LoadComposition()
+    {
+        if (selectedProductId == 0) return;
+        selectedProductName = products.First(p => p.ProductId == selectedProductId).Name;
+        composition = await DbContext.ProductComponents.Include(pc => pc.Component).Where(pc => pc.ProductId == selectedProductId).ToListAsync();
+    }
+
+    private void OpenAddModal() => showAddModal = true;
+    private async Task AddComponent()
+    {
+        if (selectedProductId == 0 || selectedComponentId == 0) return;
+        var exists = await DbContext.ProductComponents.AnyAsync(pc => pc.ProductId == selectedProductId && pc.ComponentId == selectedComponentId);
+        if (!exists)
+        {
+            DbContext.ProductComponents.Add(new ProductComponent { ProductId = selectedProductId, ComponentId = selectedComponentId, Quantity = newQuantity });
+            await DbContext.SaveChangesAsync();
+            await LoadComposition();
+            ShowNotification("Комплектующее добавлено", "success");
+        }
+        else ShowNotification("Такое комплектующее уже есть в составе", "warning");
+        CloseAddModal();
+    }
+    private async Task RemoveComponent(int componentId)
+    {
+        var pc = await DbContext.ProductComponents.FirstOrDefaultAsync(x => x.ProductId == selectedProductId && x.ComponentId == componentId);
+        if (pc != null) { DbContext.ProductComponents.Remove(pc); await DbContext.SaveChangesAsync(); await LoadComposition(); ShowNotification("Комплектующее удалено", "success"); }
+    }
+    private void OpenNewProductModal() { newProductName = ""; newProductTechProcessId = 0; showProductModal = true; }
+    private async Task CreateProduct()
+    {
+        if (string.IsNullOrWhiteSpace(newProductName) || newProductTechProcessId == 0) return;
+        var product = new Product { Name = newProductName, TechProcessId = newProductTechProcessId };
+        DbContext.Products.Add(product);
+        await DbContext.SaveChangesAsync();
+        products = await DbContext.Products.ToListAsync();
+        selectedProductId = product.ProductId;
+        await LoadComposition();
+        CloseProductModal();
+        ShowNotification("Изделие создано", "success");
+    }
+    private void CloseAddModal() { showAddModal = false; selectedComponentId = 0; newQuantity = 1; }
+    private void CloseAddModalOnBackdrop() => CloseAddModal();
+    private void CloseProductModal() { showProductModal = false; newProductName = ""; newProductTechProcessId = 0; }
+    private void CloseProductModalOnBackdrop() => CloseProductModal();
+    private void HandleAddModalKeyDown(KeyboardEventArgs e) { if (e.Key == "Escape") CloseAddModal(); }
+    private void HandleProductModalKeyDown(KeyboardEventArgs e) { if (e.Key == "Escape") CloseProductModal(); }
+    private void ShowNotification(string message, string type) { notificationMessage = message; notificationType = type; StateHasChanged(); Task.Delay(3000).ContinueWith(_ => InvokeAsync(() => { notificationMessage = ""; StateHasChanged(); })); }
+    private void ClearNotification() { notificationMessage = ""; StateHasChanged(); }
+}

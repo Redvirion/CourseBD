@@ -1,6 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Collections.Generic;
 
 namespace CourseBD.Models
 {
@@ -13,16 +12,13 @@ namespace CourseBD.Models
         [MaxLength(200)]
         public string Name { get; set; }
 
-        [Range(0, double.MaxValue, ErrorMessage = "Трудоёмкость не может быть отрицательной")]
-        public decimal LaborHours { get; set; }
+        public int TechProcessId { get; set; }
+        public string? ComponentsList { get; set; }
 
-        public string? Composition { get; set; } // денормализованное поле (заполняется триггером)
+        [ForeignKey("TechProcessId")]
+        public TechProcess TechProcess { get; set; }
 
-        public int? MaterialRef { get; set; } // основной материал (необязательно)
-
-        [ForeignKey("MaterialRef")]
-        public Material? Material { get; set; }
-
-        public ICollection<ProductComposition> ProductCompositions { get; set; }
+        public ICollection<ProductComponent> ProductComponents { get; set; }
+        public ICollection<Request> Requests { get; set; }
     }
 }

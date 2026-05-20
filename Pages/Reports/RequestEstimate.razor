@@ -1,0 +1,90 @@
+﻿@page "/reports/requestestimate"
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+
+<h3>Смета на заявку</h3>
+
+<div class="row mb-3">
+    <div class="col-md-3">
+        <label>Выберите заявку</label>
+        <select @bind="selectedRequestId" class="form-select">
+            <option value="0">-- Все --</option>
+            @foreach (var req in requests)
+            {
+                <option value="@req.RequestId">Заявка №@req.RequestId (@req.Product.Name) - @req.Quantity шт.</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label>Наценка (%)</label>
+        <input type="number" step="0.1" @bind="margin" class="form-control" />
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-primary mt-4" @onclick="LoadReport">Сформировать</button>
+    </div>
+</div>
+
+@if (estimate != null)
+{
+    <h4>Заявка №@estimate.RequestId</h4>
+    <p><strong>Изделие:</strong> @estimate.ProductName</p>
+    <p><strong>Количество:</strong> @estimate.Quantity</p>
+    <table class="table table-bordered">
+        <thead><tr><th>Статья затрат</th><th>Сумма</th></tr></thead>
+        <tbody>
+            <tr><td>Материалы</td><td>@estimate.MaterialCost.ToString("C")</td></tr>
+            <tr><td>Операции</td><td>@estimate.OperationsCost.ToString("C")</td></tr>
+            <tr><td>Комплектующие</td><td>@estimate.ComponentsCost.ToString("C")</td></tr>
+            <tr><td><strong>Итого себестоимость</strong></td><td><strong>@estimate.TotalCost.ToString("C")</strong></td></tr>
+            <tr><td>Прибыль (@margin%)</td><td>@estimate.Profit.ToString("C")</td></tr>
+            <tr class="table-primary"><td><strong>Сметная стоимость (с прибылью)</strong></td><td><strong>@estimate.EstimateWithProfit.ToString("C")</strong></td></tr>
+        </tbody>
+    </table>
+}
+
+@code {
+    private class EstimateItem { public int RequestId { get; set; } public string ProductName { get; set; } public int Quantity { get; set; } public decimal MaterialCost { get; set; } public decimal OperationsCost { get; set; } public decimal ComponentsCost { get; set; } public decimal TotalCost => MaterialCost + OperationsCost + ComponentsCost; public decimal Profit => TotalCost * Margin / 100; public decimal EstimateWithProfit => TotalCost + Profit; public decimal Margin { get; set; } }
+    private List<Request> requests = new();
+    private int selectedRequestId;
+    private decimal margin = 25;
+    private EstimateItem estimate;
+
+    protected override async Task OnInitializedAsync() => requests = await DbContext.Requests.Include(r => r.Product).ToListAsync();
+
+    private async Task LoadReport()
+    {
+        if (selectedRequestId == 0) return;
+        var request = await DbContext.Requests.Include(r => r.Product).FirstAsync(r => r.RequestId == selectedRequestId);
+        var productId = request.ProductId;
+        var quantity = request.Quantity;
+
+        var materialCost = await (from tp in DbContext.TechProcesses
+                                  join p in DbContext.Products on tp.TechProcessId equals p.TechProcessId
+                                  join m in DbContext.Materials on tp.MaterialId equals m.MaterialId
+                                  where p.ProductId == productId
+                                  select tp.MaterialQuantity * m.Cost).SumAsync();
+
+        var operationsCost = await (from tpo in DbContext.TechProcessOperations
+                                    join tp in DbContext.TechProcesses on tpo.TechProcessId equals tp.TechProcessId
+                                    join p in DbContext.Products on tp.TechProcessId equals p.TechProcessId
+                                    join o in DbContext.Operations on tpo.OperationId equals o.OperationId
+                                    where p.ProductId == productId
+                                    select o.Cost).SumAsync();
+
+        var componentsCost = await (from pc in DbContext.ProductComponents
+                                    join c in DbContext.Components on pc.ComponentId equals c.ComponentId
+                                    where pc.ProductId == productId
+                                    select pc.Quantity * c.Cost).SumAsync();
+
+        estimate = new EstimateItem
+        {
+            RequestId = selectedRequestId,
+            ProductName = request.Product.Name,
+            Quantity = quantity,
+            MaterialCost = materialCost * quantity,
+            OperationsCost = operationsCost * quantity,
+            ComponentsCost = componentsCost * quantity,
+            Margin = margin
+        };
+    }
+}
