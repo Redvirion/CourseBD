@@ -1,0 +1,26 @@
+﻿<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <div class="navbar-brand" href="">CourseBD</div>           
+    </div>
+</div>
+<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+    <nav class="flex-column">
+        <div class="nav-item px-3"><NavLink class="nav-link" href="requests">Заявки</NavLink></div>
+        <div class="nav-item px-3"><NavLink class="nav-link" href="materials"> Справочник материалов</NavLink></div>
+        <div class="nav-item px-3"><NavLink class="nav-link" href="operations">Справочник операций</NavLink></div>
+        <div class="nav-item px-3"><NavLink class="nav-link" href="components">Справочник комплектующих</NavLink></div>
+        <div class="nav-item px-3"><NavLink class="nav-link" href="techprocesses">Техпроцессы</NavLink></div>
+        <div class="nav-item px-3"><NavLink class="nav-link" href="products">Изделия</NavLink></div>        
+        <div class="nav-item px-3"><NavLink class="nav-link" href="productcomposition">Состав изделий</NavLink></div>
+        <div class="nav-item px-3"><NavLink class="nav-link" href="reports/requestcost">Себестоимость заявки</NavLink></div>
+        <div class="nav-item px-3"><NavLink class="nav-link" href="reports/productfullcomposition">Полный состав изделия</NavLink></div>
+        <div class="nav-item px-3"><NavLink class="nav-link" href="reports/requestprofit">Прибыль от реализации</NavLink></div>
+        <div class="nav-item px-3"><NavLink class="nav-link" href="reports/requestestimate">Смета на заявку</NavLink></div>
+    </nav>
+</div>
+
+@code {
+    private bool collapseNavMenu = true;
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+    private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
+}

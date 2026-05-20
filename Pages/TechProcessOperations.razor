@@ -1,0 +1,110 @@
+﻿@page "/techprocessoperations/{techProcessId:int}"
+@using CourseBD.Models
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+
+<h3>Операции техпроцесса</h3>
+
+@if (techProcess != null)
+{
+    <h4>Техпроцесс №@techProcess.TechProcessId (материал: @techProcess.Material?.Name)</h4>
+
+    <button class="btn btn-success mb-3" @onclick="OpenAddModal">Добавить операцию</button>
+
+    <table class="table table-striped">
+        <thead>
+            <tr><th>ID операции</th><th>Наименование</th><th>Стоимость</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var item in operations)
+            {
+                <tr>
+                    <td>@item.OperationId</td>
+                    <td>@item.Name</td>
+                    <td>@item.Cost.ToString("C")</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" @onclick="() => RemoveOperation(item.OperationId)">Удалить</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <!-- Модальное окно добавления -->
+    <div class="modal @(showModal ? "show d-block" : "")" style="background:rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5>Добавить операцию</h5><button class="btn-close" @onclick="CloseModal"></button></div>
+                <div class="modal-body">
+                    <select @bind="selectedOperationId" class="form-select mb-3">
+                        <option value="0">-- Выберите операцию --</option>
+                        @foreach (var op in allOperations)
+                        {
+                            <option value="@op.OperationId">@op.Name (@op.Cost.ToString("C"))</option>
+                        }
+                    </select>
+                    <button class="btn btn-primary" @onclick="AddOperation">Добавить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <p>Техпроцесс не найден.</p>
+}
+
+@code {
+    [Parameter] public int techProcessId { get; set; }
+    private TechProcess techProcess;
+    private List<Operation> operations = new();
+    private List<Operation> allOperations = new();
+    private int selectedOperationId;
+    private bool showModal = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        allOperations = await DbContext.Operations.ToListAsync();
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        techProcess = await DbContext.TechProcesses
+            .Include(t => t.Material)
+            .FirstOrDefaultAsync(t => t.TechProcessId == techProcessId);
+        if (techProcess != null)
+        {
+            var opIds = await DbContext.TechProcessOperations
+                .Where(tpo => tpo.TechProcessId == techProcessId)
+                .Select(tpo => tpo.OperationId)
+                .ToListAsync();
+            operations = await DbContext.Operations.Where(o => opIds.Contains(o.OperationId)).ToListAsync();
+        }
+    }
+
+    private void OpenAddModal() => showModal = true;
+    private async Task AddOperation()
+    {
+        if (selectedOperationId == 0) return;
+        var exists = await DbContext.TechProcessOperations.AnyAsync(tpo => tpo.TechProcessId == techProcessId && tpo.OperationId == selectedOperationId);
+        if (!exists)
+        {
+            DbContext.TechProcessOperations.Add(new TechProcessOperation { TechProcessId = techProcessId, OperationId = selectedOperationId });
+            await DbContext.SaveChangesAsync();
+            await LoadData();
+        }
+        CloseModal();
+    }
+    private async Task RemoveOperation(int operationId)
+    {
+        var item = await DbContext.TechProcessOperations.FirstOrDefaultAsync(tpo => tpo.TechProcessId == techProcessId && tpo.OperationId == operationId);
+        if (item != null)
+        {
+            DbContext.TechProcessOperations.Remove(item);
+            await DbContext.SaveChangesAsync();
+            await LoadData();
+        }
+    }
+    private void CloseModal() => showModal = false;
+}

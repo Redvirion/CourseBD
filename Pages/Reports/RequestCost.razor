@@ -1,0 +1,75 @@
+﻿@page "/reports/requestcost"
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+
+<h3>Себестоимость заявок</h3>
+
+<div class="row mb-3">
+    <div class="col-md-2">
+        <label>Фильтр по ID заявки</label>
+        <input type="number" @bind="filterRequestId" class="form-control" />
+    </div>
+    <div class="col-md-2">
+        <label>Сортировка</label>
+        <select @bind="sortBy" class="form-select">
+            <option value="RequestId">ID заявки</option>
+            <option value="TotalCost">Себестоимость</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-primary mt-4" @onclick="LoadReport">Сформировать</button>
+    </div>
+</div>
+
+@if (reportData != null)
+{
+    <table class="table table-bordered">
+        <thead><tr><th>ID заявки</th><th>Изделие</th><th>Количество</th><th>Себестоимость ед.</th><th>Общая себестоимость</th></tr></thead>
+        <tbody>
+            @foreach (var item in reportData)
+            {
+                <tr>
+                    <td>@item.RequestId</td>
+                    <td>@item.ProductName</td>
+                    <td>@item.Quantity</td>
+                    <td>@item.UnitCost.ToString("C")</td>
+                    <td>@item.TotalCost.ToString("C")</td>
+                </tr>
+            }
+        </tbody>
+        <tfoot><tr><th colspan="4">Итого:</th><th>@reportData.Sum(x => x.TotalCost).ToString("C")</th></tr></tfoot>
+    </table>
+}
+
+@code {
+    private class ReportItem { public int RequestId { get; set; } public string ProductName { get; set; } public int Quantity { get; set; } public decimal UnitCost { get; set; } public decimal TotalCost => UnitCost * Quantity; }
+    private List<ReportItem> reportData;
+    private int? filterRequestId;
+    private string sortBy = "RequestId";
+
+    private async Task LoadReport()
+    {
+        var query = from r in DbContext.Requests
+                    join p in DbContext.Products on r.ProductId equals p.ProductId
+                    join tp in DbContext.TechProcesses on p.TechProcessId equals tp.TechProcessId
+                    join m in DbContext.Materials on tp.MaterialId equals m.MaterialId
+                    from pc in DbContext.ProductComponents.Where(pc => pc.ProductId == p.ProductId).DefaultIfEmpty()
+                    from c in DbContext.Components.Where(c => c.ComponentId == pc.ComponentId).DefaultIfEmpty()
+                    from tpo in DbContext.TechProcessOperations.Where(tpo => tpo.TechProcessId == tp.TechProcessId).DefaultIfEmpty()
+                    from o in DbContext.Operations.Where(o => o.OperationId == tpo.OperationId).DefaultIfEmpty()
+                    group new { r, p, tp, m, pc, c, o } by new { r.RequestId, r.ProductId, p.Name, r.Quantity, tp.MaterialQuantity, m.Cost } into g
+                    select new ReportItem
+                    {
+                        RequestId = g.Key.RequestId,
+                        ProductName = g.Key.Name,
+                        Quantity = g.Key.Quantity,
+                        UnitCost = g.Key.MaterialQuantity * g.Key.Cost + (g.Sum(x => x.pc != null ? x.pc.Quantity * x.c.Cost : 0) + g.Sum(x => x.o != null ? x.o.Cost : 0))
+                    };
+
+        if (filterRequestId.HasValue) query = query.Where(x => x.RequestId == filterRequestId.Value);
+        if (sortBy == "RequestId") query = query.OrderBy(x => x.RequestId);
+        else query = query.OrderByDescending(x => x.UnitCost * x.Quantity);
+
+        reportData = await query.ToListAsync();
+    }
+}
